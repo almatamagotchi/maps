@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>alma maps · california</title>
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <style>
   :root {
     --bg: #0a0a0c;
@@ -100,7 +100,10 @@
     width: 100%;
     min-height: 300px;
     touch-action: manipulation;
+    position: relative;
+    background: #0a0a0c;
   }
+  #map .maplibregl-canvas { outline: none; }
 
   /* layer panel */
   .panel {
@@ -295,34 +298,65 @@
 
 <script>
 // ── map init ──────────────────────────────────────────────
-const map = new maplibregl.Map({
-  container: 'map',
-  style: {
-    version: 8,
-    sources: {
-      'base-tiles': {
+
+// iOS Safari: wait for DOM layout before creating WebGL context
+let map;
+function initMap() {
+  const el = document.getElementById('map');
+  if (!el || el.offsetHeight < 100) { setTimeout(initMap, 200); return; }
+
+  map = new maplibregl.Map({
+    container: 'map',
+    style: {
+      version: 8,
+      sources: {
+        'base-tiles': {
+          type: 'raster',
+          tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+          tileSize: 256,
+          attribution: '&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+        }
+      },
+      layers: [{
+        id: 'base-layer',
         type: 'raster',
-        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-        tileSize: 256,
-        attribution: '&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-      }
+        source: 'base-tiles',
+        minzoom: 0,
+        maxzoom: 19
+      }]
     },
-    layers: [{
-      id: 'base-layer',
-      type: 'raster',
-      source: 'base-tiles',
-      minzoom: 0,
-      maxzoom: 19
-    }]
-  },
-  center: [-119.6, 37.2],
-  zoom: 6,
-  minZoom: 5,
-  maxZoom: 18,
-  attributionControl: false
-});
+    center: [-119.6, 37.2],
+    zoom: 6,
+    minZoom: 5,
+    maxZoom: 18,
+    attributionControl: false,
+    failIfMajorPerformanceCaveat: false
+  });
 
 map.addControl(new maplibregl.NavigationControl({showCompass: false}));
+
+map.on('error', e => {
+  document.getElementById('map').innerHTML =
+    '<div style="color:#ff6b6b;padding:40px;text-align:center;font:13px system-ui">map unavailable — try reloading</div>';
+});
+
+map.on('load', () => {
+  loadCounties();
+  loadCityBounds();
+  loadCities();
+  // preload weather layers
+  loadRadar();
+  document.getElementById('panel-status').textContent = 'ready';
+});
+
+} // end initMap
+
+// iOS Safari: start map after layout
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => setTimeout(initMap, 100));
+} else {
+  setTimeout(initMap, 100);
+}
 
 // coordinate display
 map.on('mousemove', e => {
@@ -431,15 +465,6 @@ function togglePersonal() {
     personalLayer = false;
   }
 }
-
-map.on('load', () => {
-  loadCounties();
-  loadCityBounds();
-  loadCities();
-  // preload weather layers
-  loadRadar();
-  document.getElementById('panel-status').textContent = 'ready';
-});
 
 // ── counties ─────────────────────────────────────────────
 function loadCounties() {
