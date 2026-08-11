@@ -2,13 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>alma maps · california</title>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
-
   :root {
     --bg: #0a0a0c;
     --surface: #111115;
@@ -24,8 +22,9 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font: 13px/1.5 'Inter', system-ui, -apple-system, sans-serif;
+    font: 13px/1.5 system-ui, -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif;
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -81,6 +80,7 @@
     border-radius: var(--radius);
     transition: all 0.15s;
     white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .btn:hover {
@@ -98,6 +98,8 @@
   #map {
     flex: 1;
     width: 100%;
+    min-height: 300px;
+    touch-action: manipulation;
   }
 
   /* layer panel */
@@ -113,8 +115,11 @@
     z-index: 5;
     font-size: 12px;
     max-height: calc(100vh - 120px);
+    max-height: calc(100dvh - 120px);
     overflow-y: auto;
+    display: none;
   }
+  .panel.open { display: block; }
 
   .panel h3 {
     font-size: 11px;
@@ -214,9 +219,10 @@
 
   /* mobile */
   @media (max-width: 640px) {
-    .panel { width: 180px; right: 4px; top: 52px; padding: 8px; font-size: 11px; }
-    .topbar { padding: 6px 10px; }
+    .panel { width: 200px; right: 4px; top: 48px; padding: 8px; font-size: 11px; }
+    .topbar { padding: 6px 10px; gap: 6px; }
     .coords { display: none; }
+    .btn { padding: 4px 7px; font-size: 10px; }
   }
 </style>
 </head>
@@ -226,10 +232,11 @@
   <div class="brand">alma maps <span>· california</span></div>
   <div class="coords" id="coords">—</div>
   <div class="controls">
-    <button class="btn active" id="btn-dark" onclick="setTheme('dark')">dark</button>
+    <button class="btn" id="btn-dark" onclick="setTheme('dark')">dark</button>
     <button class="btn" id="btn-amber" onclick="setTheme('amber')">amber</button>
     <button class="btn" id="btn-terrain" onclick="setTheme('terrain')">terrain</button>
-    <button class="btn" id="btn-satellite" onclick="setTheme('satellite')">sat</button>
+    <button class="btn active" id="btn-satellite" onclick="setTheme('satellite')">sat</button>
+    <button class="btn" id="btn-layers" onclick="togglePanel()">layers ▾</button>
   </div>
 </div>
 
@@ -239,11 +246,25 @@
   <h3>layers</h3>
 
   <div class="section">
+    <h4>boundaries</h4>
+    <label><input type="checkbox" id="lyr-counties" onchange="toggleCounties()"> county lines</label>
+    <label><input type="checkbox" id="lyr-city-bounds" onchange="toggleCityBounds()"> city borders</label>
+  </div>
+
+  <hr class="divider">
+
+  <div class="section">
+    <h4>places</h4>
+    <label><input type="checkbox" id="lyr-cities" onchange="toggleCities()"> cities</label>
+    <label><input type="checkbox" id="lyr-personal" onchange="togglePersonal()"> alma's california</label>
+  </div>
+
+  <hr class="divider">
+
+  <div class="section">
     <h4>live</h4>
     <label><input type="checkbox" disabled> wildfires <span class="badge">soon</span></label>
     <label><input type="checkbox" disabled> air quality <span class="badge">soon</span></label>
-    <label><input type="checkbox" disabled> reservoir levels <span class="badge">soon</span></label>
-    <label><input type="checkbox" disabled> marine layer <span class="badge">soon</span></label>
   </div>
 
   <hr class="divider">
@@ -251,25 +272,17 @@
   <div class="section">
     <h4>permanent</h4>
     <label><input type="checkbox" disabled> fault lines <span class="badge">soon</span></label>
-    <label><input type="checkbox" disabled> redwood groves <span class="badge">soon</span></label>
     <label><input type="checkbox" disabled> ghost towns <span class="badge">soon</span></label>
     <label><input type="checkbox" disabled> indigenous territories <span class="badge">soon</span></label>
-      <label><input type="checkbox" id="lyr-counties" onchange="toggleCounties()"> county lines</label>
-      <label><input type="checkbox" id="lyr-cities" onchange="toggleCities()"> cities</label>
-  </div>
-
-  <hr class="divider">
-
-  <div class="section">
-    <h4>personal</h4>
-    <label><input type="checkbox" id="lyr-personal" onchange="togglePersonal()"> alma's california</label>
   </div>
 
   <div class="status" id="panel-status">—</div>
 </div>
 
 <div class="legend" id="legend">
-  <div class="row"><div class="swatch" style="background:var(--accent)"></div> personal markers</div>
+  <div class="row"><div class="swatch" style="background:var(--accent)"></div> county</div>
+  <div class="row"><div class="swatch" style="background:#e8e0d8"></div> city</div>
+  <div class="row"><div class="swatch" style="background:rgba(212,168,83,0.15);border:1px solid rgba(212,168,83,0.3)"></div> city border</div>
 </div>
 
 <script>
@@ -279,17 +292,17 @@ const map = new maplibregl.Map({
   style: {
     version: 8,
     sources: {
-      'carto-dark': {
+      'base-tiles': {
         type: 'raster',
-        tiles: ['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
+        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
         tileSize: 256,
-        attribution: '&copy; <a href="https://carto.com">CARTO</a>'
+        attribution: '&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
       }
     },
     layers: [{
-      id: 'carto-dark-layer',
+      id: 'base-layer',
       type: 'raster',
-      source: 'carto-dark',
+      source: 'base-tiles',
       minzoom: 0,
       maxzoom: 19
     }]
@@ -309,6 +322,14 @@ map.on('mousemove', e => {
   document.getElementById('coords').textContent =
     ll.lat.toFixed(4) + '°N ' + ll.lng.toFixed(4) + '°W';
 });
+
+// ── layer panel toggle ────────────────────────────────────
+function togglePanel() {
+  const p = document.getElementById('panel');
+  const b = document.getElementById('btn-layers');
+  p.classList.toggle('open');
+  b.textContent = p.classList.contains('open') ? 'layers ▴' : 'layers ▾';
+}
 
 // ── personal markers ──────────────────────────────────────
 const MARKERS = [
@@ -379,12 +400,11 @@ function addPersonalMarkers() {
     }
   });
 
-  // click popup
   map.on('click', 'personal-markers', e => {
     const props = e.features[0].properties;
     new maplibregl.Popup({ offset: 14, closeButton: false })
       .setLngLat(e.lngLat)
-      .setHTML(`<div style="color:#c4c0b8;font:12px Inter,sans-serif;max-width:260px"><strong style="color:#d4a853">${props.name}</strong><p style="margin:4px 0 0;color:#8b8780;line-height:1.4">${props.desc}</p></div>`)
+      .setHTML(`<div style="color:#c4c0b8;font:12px system-ui,sans-serif;max-width:260px"><strong style="color:#d4a853">${props.name}</strong><p style="margin:4px 0 0;color:#8b8780;line-height:1.4">${props.desc}</p></div>`)
       .addTo(map);
   });
 
@@ -406,6 +426,7 @@ function togglePersonal() {
 
 map.on('load', () => {
   loadCounties();
+  loadCityBounds();
   loadCities();
   document.getElementById('panel-status').textContent = 'ready';
 });
@@ -454,6 +475,81 @@ function toggleCounties() {
   const v = on ? 'visible' : 'none';
   if (map.getLayer('county-lines')) map.setLayoutProperty('county-lines', 'visibility', v);
   if (map.getLayer('county-labels')) map.setLayoutProperty('county-labels', 'visibility', v);
+}
+
+// ── city borders ──────────────────────────────────────────
+const CITY_BOUNDS = {
+  'San Francisco': [[-122.515,37.709],[-122.510,37.710],[-122.465,37.716],[-122.420,37.725],[-122.380,37.740],[-122.360,37.765],[-122.355,37.810],[-122.390,37.812],[-122.410,37.808],[-122.455,37.803],[-122.505,37.792],[-122.515,37.775],[-122.515,37.709]],
+  'Oakland': [[-122.360,37.765],[-122.355,37.810],[-122.330,37.820],[-122.280,37.830],[-122.220,37.818],[-122.190,37.800],[-122.200,37.770],[-122.215,37.745],[-122.250,37.735],[-122.300,37.740],[-122.340,37.750],[-122.360,37.765]],
+  'San Jose': [[-122.050,37.250],[-122.045,37.255],[-121.980,37.270],[-121.910,37.290],[-121.850,37.310],[-121.790,37.340],[-121.760,37.380],[-121.770,37.430],[-121.810,37.450],[-121.880,37.440],[-121.950,37.410],[-122.000,37.380],[-122.030,37.340],[-122.050,37.300],[-122.050,37.250]],
+  'Sacramento': [[-121.560,38.530],[-121.555,38.540],[-121.510,38.560],[-121.450,38.580],[-121.410,38.600],[-121.390,38.640],[-121.410,38.660],[-121.460,38.660],[-121.510,38.640],[-121.550,38.610],[-121.565,38.570],[-121.560,38.530]],
+  'Los Angeles': [[-118.670,33.700],[-118.500,33.720],[-118.350,33.770],[-118.220,33.820],[-118.150,33.870],[-118.130,33.940],[-118.160,34.000],[-118.220,34.060],[-118.300,34.110],[-118.390,34.150],[-118.480,34.180],[-118.570,34.180],[-118.670,34.140],[-118.720,34.080],[-118.720,34.000],[-118.680,33.920],[-118.670,33.820],[-118.670,33.700]],
+  'San Diego': [[-117.280,32.540],[-117.250,32.550],[-117.160,32.580],[-117.080,32.620],[-117.030,32.670],[-117.010,32.730],[-117.030,32.790],[-117.100,32.850],[-117.170,32.890],[-117.250,32.900],[-117.280,32.870],[-117.280,32.800],[-117.280,32.720],[-117.280,32.640],[-117.280,32.540]],
+  'Fresno': [[-119.880,36.690],[-119.870,36.700],[-119.790,36.720],[-119.720,36.745],[-119.690,36.770],[-119.690,36.810],[-119.720,36.840],[-119.790,36.850],[-119.860,36.840],[-119.890,36.810],[-119.890,36.770],[-119.880,36.730],[-119.880,36.690]],
+  'Long Beach': [[-118.250,33.750],[-118.240,33.760],[-118.190,33.770],[-118.140,33.785],[-118.110,33.810],[-118.120,33.840],[-118.160,33.840],[-118.200,33.830],[-118.240,33.810],[-118.250,33.780],[-118.250,33.750]],
+};
+
+function loadCityBounds() {
+  const features = [];
+  for (const [name, coords] of Object.entries(CITY_BOUNDS)) {
+    const ring = coords.concat([coords[0]]); // close polygon
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [ring] },
+      properties: { name: name }
+    });
+  }
+  map.addSource('city-bounds', { type: 'geojson', data: { type: 'FeatureCollection', features } });
+  // fill
+  map.addLayer({
+    id: 'city-bounds-fill',
+    type: 'fill',
+    source: 'city-bounds',
+    layout: { visibility: 'none' },
+    paint: {
+      'fill-color': '#d4a853',
+      'fill-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.04, 10, 0.10, 14, 0.15]
+    }
+  });
+  // outline
+  map.addLayer({
+    id: 'city-bounds-line',
+    type: 'line',
+    source: 'city-bounds',
+    layout: { visibility: 'none' },
+    paint: {
+      'line-color': '#d4a853',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 12, 1.2, 15, 2],
+      'line-opacity': 0.45,
+      'line-dasharray': [2, 3]
+    }
+  });
+  // label
+  map.addLayer({
+    id: 'city-bounds-label',
+    type: 'symbol',
+    source: 'city-bounds',
+    layout: {
+      visibility: 'none',
+      'text-field': ['get', 'name'],
+      'text-font': ['Inter Regular', 'Arial Unicode MS Regular'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 9, 12, 12],
+      'text-anchor': 'center'
+    },
+    paint: {
+      'text-color': '#d4a853',
+      'text-halo-color': '#0a0a0c',
+      'text-halo-width': 2
+    }
+  });
+}
+
+function toggleCityBounds() {
+  const on = document.getElementById('lyr-city-bounds').checked;
+  const v = on ? 'visible' : 'none';
+  ['city-bounds-fill','city-bounds-line','city-bounds-label'].forEach(id => {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
+  });
 }
 
 // ── cities ────────────────────────────────────────────────
@@ -542,7 +638,7 @@ function setTheme(theme) {
   document.querySelectorAll('.controls .btn').forEach(b => b.classList.remove('active'));
   document.getElementById('btn-' + theme).classList.add('active');
 
-  const src = map.getSource('carto-dark');
+  const src = map.getSource('base-tiles');
   if (!src) return;
 
   if (theme === 'dark') {
