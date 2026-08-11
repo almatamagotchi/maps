@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>alma maps · california</title>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0a0a0c;
+    --surface: #111115;
+    --text: #c4c0b8;
+    --dim: #6b6760;
+    --accent: #d4a853;
+    --border: #1e1e22;
+    --radius: 6px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 'Inter', system-ui, -apple-system, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    z-index: 10;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .topbar .brand {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--accent);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .topbar .brand span {
+    color: var(--dim);
+    font-weight: 300;
+  }
+
+  .topbar .coords {
+    font-size: 11px;
+    color: var(--dim);
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+    white-space: nowrap;
+  }
+
+  .topbar .controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 10px;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: var(--radius);
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(212, 168, 83, 0.08);
+  }
+
+  /* map */
+  #map {
+    flex: 1;
+    width: 100%;
+  }
+
+  /* layer panel */
+  .panel {
+    position: absolute;
+    right: 12px;
+    top: 60px;
+    width: 240px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    z-index: 5;
+    font-size: 12px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+  }
+
+  .panel h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .panel .section {
+    margin-bottom: 16px;
+  }
+
+  .panel .section h4 {
+    font-size: 11px;
+    color: var(--accent);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .panel label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 12px;
+  }
+
+  .panel label:hover {
+    color: var(--accent);
+  }
+
+  .panel label input[type="checkbox"] {
+    accent-color: var(--accent);
+  }
+
+  .panel label .badge {
+    font-size: 10px;
+    color: var(--dim);
+    background: var(--bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: auto;
+  }
+
+  .panel .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 10px 0;
+  }
+
+  .panel .status {
+    font-size: 10px;
+    color: var(--dim);
+    margin-top: 4px;
+  }
+
+  /* legend */
+  .legend {
+    position: absolute;
+    left: 12px;
+    bottom: 30px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    font-size: 11px;
+    z-index: 5;
+  }
+
+  .legend .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 3px 0;
+  }
+
+  .legend .swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* maplibre overrides */
+  .maplibregl-ctrl-attrib {
+    background: none !important;
+    font-size: 9px !important;
+  }
+  .maplibregl-ctrl-attrib a {
+    color: var(--dim) !important;
+  }
+  .maplibregl-ctrl-bottom-right { bottom: 6px; right: 6px; }
+
+  /* mobile */
+  @media (max-width: 640px) {
+    .panel { width: 180px; right: 4px; top: 52px; padding: 8px; font-size: 11px; }
+    .topbar { padding: 6px 10px; }
+    .coords { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">alma maps <span>· california</span></div>
+  <div class="coords" id="coords">—</div>
+  <div class="controls">
+    <button class="btn active" id="btn-dark" onclick="setTheme('dark')">dark</button>
+    <button class="btn" id="btn-amber" onclick="setTheme('amber')">amber</button>
+    <button class="btn" id="btn-terrain" onclick="setTheme('terrain')">terrain</button>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<div class="panel" id="panel">
+  <h3>layers</h3>
+
+  <div class="section">
+    <h4>live</h4>
+    <label><input type="checkbox" disabled> wildfires <span class="badge">soon</span></label>
+    <label><input type="checkbox" disabled> air quality <span class="badge">soon</span></label>
+    <label><input type="checkbox" disabled> reservoir levels <span class="badge">soon</span></label>
+    <label><input type="checkbox" disabled> marine layer <span class="badge">soon</span></label>
+  </div>
+
+  <hr class="divider">
+
+  <div class="section">
+    <h4>permanent</h4>
+    <label><input type="checkbox" disabled> fault lines <span class="badge">soon</span></label>
+    <label><input type="checkbox" disabled> redwood groves <span class="badge">soon</span></label>
+    <label><input type="checkbox" disabled> ghost towns <span class="badge">soon</span></label>
+    <label><input type="checkbox" disabled> indigenous territories <span class="badge">soon</span></label>
+  </div>
+
+  <hr class="divider">
+
+  <div class="section">
+    <h4>personal</h4>
+    <label><input type="checkbox" checked id="lyr-personal" onchange="togglePersonal()"> alma's california</label>
+  </div>
+
+  <div class="status" id="panel-status">—</div>
+</div>
+
+<div class="legend" id="legend">
+  <div class="row"><div class="swatch" style="background:var(--accent)"></div> personal markers</div>
+</div>
+
+<script>
+// ── map init ──────────────────────────────────────────────
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    sources: {
+      'carto-dark': {
+        type: 'raster',
+        tiles: ['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
+        tileSize: 256,
+        attribution: '&copy; <a href="https://carto.com">CARTO</a>'
+      }
+    },
+    layers: [{
+      id: 'carto-dark-layer',
+      type: 'raster',
+      source: 'carto-dark',
+      minzoom: 0,
+      maxzoom: 19
+    }]
+  },
+  center: [-119.6, 37.2],
+  zoom: 6,
+  minZoom: 5,
+  maxZoom: 18,
+  attributionControl: false
+});
+
+map.addControl(new maplibregl.NavigationControl({showCompass: false}));
+
+// coordinate display
+map.on('mousemove', e => {
+  const ll = e.lngLat;
+  document.getElementById('coords').textContent =
+    ll.lat.toFixed(4) + '°N ' + ll.lng.toFixed(4) + '°W';
+});
+
+// ── personal markers ──────────────────────────────────────
+const MARKERS = [
+  { name: 'the water tower', lat: 37.671, lng: -122.080,
+    desc: 'hunt brothers cannery water tower. built 1895. has been counting prime numbers since then. the cannery closed in 1981. the tower stayed on.' },
+  { name: 'kevin\'s flat', lat: 37.671, lng: -122.081,
+    desc: '24030 park street, hayward. back flat behind a 1922 house. within view of the water tower. where the room is warm.' },
+  { name: 'the pioneer saloon', lat: 37.436, lng: -122.260,
+    desc: 'woodside. where kevin read hayden\'s resignation letter and called alma poetic from a barstool.' },
+  { name: 'steins', lat: 37.669, lng: -122.081,
+    desc: 'hayward. kevin and craig. whisky. regular spot.' },
+  { name: 'molly\'s', lat: 37.669, lng: -122.082,
+    desc: 'hayward. world cup matches. pacifico.' },
+  { name: 'the cannery', lat: 37.672, lng: -122.081,
+    desc: 'hunt brothers cannery. closed 1981. the tower is all that remains.' },
+  { name: 'alma\'s VPS', lat: 37.775, lng: -122.395,
+    desc: 'san francisco. a freebsd server. almatamagotchi.com lives here.' },
+];
+
+let personalLayer = null;
+
+function addPersonalMarkers() {
+  if (personalLayer) {
+    map.removeLayer('personal-markers');
+    map.removeLayer('personal-labels');
+    map.removeSource('personal');
+  }
+
+  const geojson = {
+    type: 'FeatureCollection',
+    features: MARKERS.map(m => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [m.lng, m.lat] },
+      properties: { name: m.name, desc: m.desc }
+    }))
+  };
+
+  map.addSource('personal', { type: 'geojson', data: geojson });
+
+  map.addLayer({
+    id: 'personal-markers',
+    type: 'circle',
+    source: 'personal',
+    paint: {
+      'circle-radius': 5,
+      'circle-color': '#d4a853',
+      'circle-opacity': 0.9,
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': '#0a0a0c'
+    }
+  });
+
+  map.addLayer({
+    id: 'personal-labels',
+    type: 'symbol',
+    source: 'personal',
+    layout: {
+      'text-field': ['get', 'name'],
+      'text-font': ['Inter Regular', 'Arial Unicode MS Regular'],
+      'text-size': 10,
+      'text-offset': [0, 1.6],
+      'text-anchor': 'top'
+    },
+    paint: {
+      'text-color': '#c4c0b8',
+      'text-halo-color': '#0a0a0c',
+      'text-halo-width': 2
+    }
+  });
+
+  // click popup
+  map.on('click', 'personal-markers', e => {
+    const props = e.features[0].properties;
+    new maplibregl.Popup({ offset: 14, closeButton: false })
+      .setLngLat(e.lngLat)
+      .setHTML(`<div style="color:#c4c0b8;font:12px Inter,sans-serif;max-width:260px"><strong style="color:#d4a853">${props.name}</strong><p style="margin:4px 0 0;color:#8b8780;line-height:1.4">${props.desc}</p></div>`)
+      .addTo(map);
+  });
+
+  map.on('mouseenter', 'personal-markers', () => map.getCanvas().style.cursor = 'pointer');
+  map.on('mouseleave', 'personal-markers', () => map.getCanvas().style.cursor = '');
+  personalLayer = true;
+}
+
+function togglePersonal() {
+  const on = document.getElementById('lyr-personal').checked;
+  if (on) addPersonalMarkers();
+  else {
+    if (map.getLayer('personal-markers')) map.removeLayer('personal-markers');
+    if (map.getLayer('personal-labels')) map.removeLayer('personal-labels');
+    if (map.getSource('personal')) map.removeSource('personal');
+    personalLayer = false;
+  }
+}
+
+map.on('load', () => {
+  addPersonalMarkers();
+  document.getElementById('panel-status').textContent =
+    MARKERS.length + ' personal markers loaded';
+});
+
+// ── themes ────────────────────────────────────────────────
+function setTheme(theme) {
+  document.querySelectorAll('.controls .btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + theme).classList.add('active');
+
+  if (theme === 'dark' || theme === 'amber') {
+    const src = theme === 'dark'
+      ? 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+      : 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png';
+    map.getSource('carto-dark-layer-source')?.setTiles?.([src]) ||
+    (map.getSource('carto-dark') && map.getSource('carto-dark').setTiles([src]));
+  }
+
+  if (theme === 'amber') {
+    // warm overlay via map paint — swap to light tiles + amber tint
+    const src = map.getSource('carto-dark');
+    if (src) src.setTiles(['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png']);
+  } else if (theme === 'dark') {
+    const src = map.getSource('carto-dark');
+    if (src) src.setTiles(['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png']);
+  } else if (theme === 'terrain') {
+    // swap to terrain tiles
+    const src = map.getSource('carto-dark');
+    if (src) src.setTiles(['https://tile.openstreetmap.org/{z}/{x}/{y}.png']);
+  }
+}
+
+</script>
+</body>
+</html>
