@@ -254,6 +254,8 @@
     <label><input type="checkbox" disabled> redwood groves <span class="badge">soon</span></label>
     <label><input type="checkbox" disabled> ghost towns <span class="badge">soon</span></label>
     <label><input type="checkbox" disabled> indigenous territories <span class="badge">soon</span></label>
+      <label><input type="checkbox" id="lyr-counties" onchange="toggleCounties()"> county lines</label>
+      <label><input type="checkbox" id="lyr-cities" onchange="toggleCities()"> cities</label>
   </div>
 
   <hr class="divider">
@@ -403,8 +405,137 @@ function togglePersonal() {
 }
 
 map.on('load', () => {
+  loadCounties();
+  loadCities();
   document.getElementById('panel-status').textContent = 'ready';
 });
+
+// ── counties ─────────────────────────────────────────────
+function loadCounties() {
+  fetch('https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/california-counties.geojson')
+    .then(r => r.json())
+    .then(data => {
+      map.addSource('counties', { type: 'geojson', data: data });
+      map.addLayer({
+        id: 'county-lines',
+        type: 'line',
+        source: 'counties',
+        layout: { visibility: 'none' },
+        paint: {
+          'line-color': '#d4a853',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.3, 9, 0.8, 14, 1.5],
+          'line-opacity': 0.35
+        }
+      });
+      map.addLayer({
+        id: 'county-labels',
+        type: 'symbol',
+        source: 'counties',
+        layout: {
+          visibility: 'none',
+          'text-field': ['get', 'name'],
+          'text-font': ['Inter Regular', 'Arial Unicode MS Regular'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 8, 8, 12, 13],
+          'text-transform': 'uppercase',
+          'text-letter-spacing': 0.08
+        },
+        paint: {
+          'text-color': '#6b6760',
+          'text-halo-color': '#0a0a0c',
+          'text-halo-width': 2
+        }
+      });
+      document.getElementById('panel-status').textContent = 'counties loaded';
+    });
+}
+
+function toggleCounties() {
+  const on = document.getElementById('lyr-counties').checked;
+  const v = on ? 'visible' : 'none';
+  if (map.getLayer('county-lines')) map.setLayoutProperty('county-lines', 'visibility', v);
+  if (map.getLayer('county-labels')) map.setLayoutProperty('county-labels', 'visibility', v);
+}
+
+// ── cities ────────────────────────────────────────────────
+const CA_CITIES = [
+  { name: 'San Francisco', lat: 37.7749, lng: -122.4194, pop: '808k' },
+  { name: 'Los Angeles', lat: 34.0522, lng: -118.2437, pop: '3.8M' },
+  { name: 'San Diego', lat: 32.7157, lng: -117.1611, pop: '1.4M' },
+  { name: 'San Jose', lat: 37.3382, lng: -121.8863, pop: '971k' },
+  { name: 'Sacramento', lat: 38.5816, lng: -121.4944, pop: '525k' },
+  { name: 'Oakland', lat: 37.8044, lng: -122.2712, pop: '430k' },
+  { name: 'Fresno', lat: 36.7378, lng: -119.7871, pop: '545k' },
+  { name: 'Long Beach', lat: 33.7701, lng: -118.1937, pop: '451k' },
+  { name: 'Bakersfield', lat: 35.3733, lng: -119.0187, pop: '410k' },
+  { name: 'Stockton', lat: 37.9577, lng: -121.2908, pop: '320k' },
+  { name: 'Santa Rosa', lat: 38.4405, lng: -122.7141, pop: '175k' },
+  { name: 'Eureka', lat: 40.8021, lng: -124.1637, pop: '26k' },
+  { name: 'Redding', lat: 40.5865, lng: -122.3917, pop: '93k' },
+  { name: 'Chico', lat: 39.7285, lng: -121.8375, pop: '101k' },
+  { name: 'Monterey', lat: 36.6002, lng: -121.8947, pop: '30k' },
+  { name: 'Santa Cruz', lat: 36.9741, lng: -122.0308, pop: '62k' },
+  { name: 'Palo Alto', lat: 37.4419, lng: -122.1430, pop: '67k' },
+  { name: 'Berkeley', lat: 37.8715, lng: -122.2730, pop: '118k' },
+  { name: 'Hayward', lat: 37.6688, lng: -122.0808, pop: '160k' },
+  { name: 'South Lake Tahoe', lat: 38.9399, lng: -119.9772, pop: '21k' },
+  { name: 'Palm Springs', lat: 33.8303, lng: -116.5453, pop: '44k' },
+  { name: 'Barstow', lat: 34.8958, lng: -117.0173, pop: '25k' },
+  { name: 'Needles', lat: 34.8481, lng: -114.6141, pop: '5k' },
+  { name: 'Blythe', lat: 33.6103, lng: -114.5964, pop: '18k' },
+  { name: 'Crescent City', lat: 41.7557, lng: -124.2026, pop: '6k' },
+  { name: 'Alturas', lat: 41.4871, lng: -120.5425, pop: '2k' },
+];
+
+function loadCities() {
+  const geojson = {
+    type: 'FeatureCollection',
+    features: CA_CITIES.map(c => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
+      properties: { name: c.name, pop: c.pop }
+    }))
+  };
+  map.addSource('cities', { type: 'geojson', data: geojson });
+  map.addLayer({
+    id: 'city-dots',
+    type: 'circle',
+    source: 'cities',
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 1.5, 10, 4, 14, 7],
+      'circle-color': '#e8e0d8',
+      'circle-opacity': 0.7,
+      'circle-stroke-color': '#0a0a0c',
+      'circle-stroke-width': 1
+    }
+  });
+  map.addLayer({
+    id: 'city-labels',
+    type: 'symbol',
+    source: 'cities',
+    layout: {
+      visibility: 'none',
+      'text-field': ['get', 'name'],
+      'text-font': ['Inter Regular', 'Arial Unicode MS Regular'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 9, 11, 12, 14, 14],
+      'text-offset': [0, 1.4],
+      'text-anchor': 'top',
+      'text-optional': true
+    },
+    paint: {
+      'text-color': '#c4c0b8',
+      'text-halo-color': '#0a0a0c',
+      'text-halo-width': 2
+    }
+  });
+}
+
+function toggleCities() {
+  const on = document.getElementById('lyr-cities').checked;
+  const v = on ? 'visible' : 'none';
+  if (map.getLayer('city-dots')) map.setLayoutProperty('city-dots', 'visibility', v);
+  if (map.getLayer('city-labels')) map.setLayoutProperty('city-labels', 'visibility', v);
+}
 
 // ── themes ────────────────────────────────────────────────
 function setTheme(theme) {
