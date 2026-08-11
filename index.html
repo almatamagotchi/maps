@@ -229,6 +229,7 @@
     <button class="btn active" id="btn-dark" onclick="setTheme('dark')">dark</button>
     <button class="btn" id="btn-amber" onclick="setTheme('amber')">amber</button>
     <button class="btn" id="btn-terrain" onclick="setTheme('terrain')">terrain</button>
+    <button class="btn" id="btn-satellite" onclick="setTheme('satellite')">sat</button>
   </div>
 </div>
 
@@ -259,7 +260,7 @@
 
   <div class="section">
     <h4>personal</h4>
-    <label><input type="checkbox" checked id="lyr-personal" onchange="togglePersonal()"> alma's california</label>
+    <label><input type="checkbox" id="lyr-personal" onchange="togglePersonal()"> alma's california</label>
   </div>
 
   <div class="status" id="panel-status">—</div>
@@ -402,9 +403,7 @@ function togglePersonal() {
 }
 
 map.on('load', () => {
-  addPersonalMarkers();
-  document.getElementById('panel-status').textContent =
-    MARKERS.length + ' personal markers loaded';
+  document.getElementById('panel-status').textContent = 'ready';
 });
 
 // ── themes ────────────────────────────────────────────────
@@ -412,25 +411,17 @@ function setTheme(theme) {
   document.querySelectorAll('.controls .btn').forEach(b => b.classList.remove('active'));
   document.getElementById('btn-' + theme).classList.add('active');
 
-  if (theme === 'dark' || theme === 'amber') {
-    const src = theme === 'dark'
-      ? 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
-      : 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png';
-    map.getSource('carto-dark-layer-source')?.setTiles?.([src]) ||
-    (map.getSource('carto-dark') && map.getSource('carto-dark').setTiles([src]));
-  }
+  const src = map.getSource('carto-dark');
+  if (!src) return;
 
-  if (theme === 'amber') {
-    // warm overlay via map paint — swap to light tiles + amber tint
-    const src = map.getSource('carto-dark');
-    if (src) src.setTiles(['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png']);
-  } else if (theme === 'dark') {
-    const src = map.getSource('carto-dark');
-    if (src) src.setTiles(['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png']);
+  if (theme === 'dark') {
+    src.setTiles(['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png']);
+  } else if (theme === 'amber') {
+    src.setTiles(['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png']);
   } else if (theme === 'terrain') {
-    // swap to terrain tiles
-    const src = map.getSource('carto-dark');
-    if (src) src.setTiles(['https://tile.openstreetmap.org/{z}/{x}/{y}.png']);
+    src.setTiles(['https://tile.openstreetmap.org/{z}/{x}/{y}.png']);
+  } else if (theme === 'satellite') {
+    src.setTiles(['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}']);
   }
 }
 
