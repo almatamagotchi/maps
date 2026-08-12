@@ -274,6 +274,8 @@
 
   <div class="section">
     <h4>live</h4>
+    <label><input type="checkbox" id="lyr-caltrain" onchange="toggleCaltrain()"> caltrain departures</label>
+    <label><input type="checkbox" id="lyr-traffic" onchange="toggleTraffic()"> traffic incidents</label>
     <label><input type="checkbox" disabled> wildfires <span class="badge">soon</span></label>
     <label><input type="checkbox" disabled> air quality <span class="badge">soon</span></label>
   </div>
@@ -805,6 +807,155 @@ function toggleWind() {
   const on = document.getElementById('lyr-wind').checked;
   if (!map.getSource('wind')) { loadWind(); return; }
   map.setLayoutProperty('wind-layer', 'visibility', on ? 'visible' : 'none');
+}
+
+// ── transit: caltrain ───────────────────────────────────
+const CALTRAIN_STATIONS = [
+  { key: 'palo_alto', name: 'Palo Alto', lat: 37.4431, lng: -122.1648 },
+  { key: 'california_ave', name: 'California Ave', lat: 37.4294, lng: -122.1426 },
+];
+let caltrainLoaded = false;
+
+function loadCaltrain() {
+  fetch('/paloalto/caltrain.json')
+    .then(r => r.json())
+    .then(data => {
+      const fmt = iso => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      const features = CALTRAIN_STATIONS.map(st => {
+        const sd = data.stations && data.stations[st.key];
+        if (!sd) return null;
+        const nb = (sd.nb || []).slice(0, 3);
+        const sb = (sd.sb || []).slice(0, 3);
+        let html = '<div style="color:#c4c0b8;font:12px system-ui;max-width:280px">';
+        html += '<strong style="color:#d4a853">' + sd.name + ' · caltrain</strong>';
+        html += '<p style="margin:4px 0 2px;color:#8b8780">northbound</p>';
+        nb.forEach(t => { html += '<div style="margin:1px 0">' + fmt(t.expected) + ' <span style="color:#8b8780">→</span> ' + t.destination + '</div>'; });
+        html += '<p style="margin:6px 0 2px;color:#8b8780">southbound</p>';
+        sb.forEach(t => { html += '<div style="margin:1px 0">' + fmt(t.expected) + ' <span style="color:#8b8780">→</span> ' + t.destination + '</div>'; });
+        html += '</div>';
+        return {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [st.lng, st.lat] },
+          properties: { name: sd.name, html: html }
+        };
+      }).filter(Boolean);
+
+      map.addSource('caltrain', { type: 'geojson', data: { type: 'FeatureCollection', features } });
+      map.addLayer({
+        id: 'caltrain-markers',
+        type: 'circle',
+        source: 'caltrain',
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#7fb6d9',
+          'circle-opacity': 0.95,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#0a0a0c'
+        }
+      });
+      map.addLayer({
+        id: 'caltrain-labels',
+        type: 'symbol',
+        source: 'caltrain',
+        layout: {
+          visibility: 'none',
+          'text-field': ['get', 'name'],
+          'text-font': ['Inter Regular', 'Arial Unicode MS Regular'],
+          'text-size': 11,
+          'text-offset': [0, 1.8],
+          'text-anchor': 'top'
+        },
+        paint: {
+          'text-color': '#9dc4df',
+          'text-halo-color': '#0a0a0c',
+          'text-halo-width': 2
+        }
+      });
+
+      map.on('click', 'caltrain-markers', e => {
+        new maplibregl.Popup({ offset: 14, closeButton: false })
+          .setLngLat(e.lngLat)
+          .setHTML(e.features[0].properties.html)
+          .addTo(map);
+      });
+      map.on('mouseenter', 'caltrain-markers', () => map.getCanvas().style.cursor = 'pointer');
+      map.on('mouseleave', 'caltrain-markers', () => map.getCanvas().style.cursor = '');
+
+      caltrainLoaded = true;
+      document.getElementById('panel-status').textContent = 'caltrain loaded';
+    })
+    .catch(() => { document.getElementById('panel-status').textContent = 'caltrain unavailable'; });
+}
+
+function toggleCaltrain() {
+  const on = document.getElementById('lyr-caltrain').checked;
+  if (!caltrainLoaded) { loadCaltrain(); return; }
+  const v = on ? 'visible' : 'none';
+  if (map.getLayer('caltrain-markers')) map.setLayoutProperty('caltrain-markers', 'visibility', v);
+  if (map.getLayer('caltrain-labels')) map.setLayoutProperty('caltrain-labels', 'visibility', v);
+}
+
+// ── transit: traffic ────────────────────────────────────
+let trafficLoaded = false;
+
+function loadTraffic() {
+  fetch('/paloalto/traffic.json')
+    .then(r => r.json())
+    .then(data => {
+      const sevColor = s => {
+        if (s === 'Major') return '#e0554f';
+        if (s === 'Moderate') return '#e0b050';
+        if (s === 'Minor') return '#7fa86b';
+        return '#b0905a';
+      };
+      const features = (data.events || [])
+        .filter(e => e.status === 'ACTIVE' && e.geography && e.geography.coordinates)
+        .map(e => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: e.geography.coordinates },
+          properties: {
+            headline: e.headline,
+            severity: e.severity || 'Unknown',
+            color: sevColor(e.severity)
+          }
+        }));
+
+      map.addSource('traffic', { type: 'geojson', data: { type: 'FeatureCollection', features } });
+      map.addLayer({
+        id: 'traffic-dots',
+        type: 'circle',
+        source: 'traffic',
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 2.5, 10, 5, 14, 8],
+          'circle-color': ['get', 'color'],
+          'circle-opacity': 0.9,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#0a0a0c'
+        }
+      });
+
+      map.on('click', 'traffic-dots', e => {
+        const p = e.features[0].properties;
+        new maplibregl.Popup({ offset: 14, closeButton: false })
+          .setLngLat(e.lngLat)
+          .setHTML('<div style="color:#c4c0b8;font:12px system-ui;max-width:280px"><strong style="color:#d4a853">' + p.severity + '</strong><p style="margin:4px 0 0;color:#8b8780;line-height:1.4">' + p.headline + '</p></div>')
+          .addTo(map);
+      });
+      map.on('mouseenter', 'traffic-dots', () => map.getCanvas().style.cursor = 'pointer');
+      map.on('mouseleave', 'traffic-dots', () => map.getCanvas().style.cursor = '');
+
+      trafficLoaded = true;
+      document.getElementById('panel-status').textContent = features.length + ' incidents';
+    })
+    .catch(() => { document.getElementById('panel-status').textContent = 'traffic unavailable'; });
+}
+
+function toggleTraffic() {
+  const on = document.getElementById('lyr-traffic').checked;
+  if (!trafficLoaded) { loadTraffic(); return; }
+  map.setLayoutProperty('traffic-dots', 'visibility', on ? 'visible' : 'none');
 }
 
 // ── themes ────────────────────────────────────────────────
