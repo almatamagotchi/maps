@@ -277,7 +277,7 @@
     <label><input type="checkbox" id="lyr-caltrain" onchange="toggleCaltrain()"> caltrain departures</label>
     <label><input type="checkbox" id="lyr-traffic" onchange="toggleTraffic()"> traffic incidents</label>
     <label><input type="checkbox" id="lyr-wildfires" onchange="toggleWildfires()"> wildfires</label>
-    <label><input type="checkbox" disabled> air quality <span class="badge">soon</span></label>
+    <label><input type="checkbox" id="lyr-aqi" onchange="toggleAqi()"> air quality</label>
   </div>
 
   <hr class="divider">
@@ -1011,6 +1011,79 @@ function toggleWildfires() {
   if (!wildfiresLoaded) { loadWildfires(); return; }
   map.setLayoutProperty('wildfire-fill', 'visibility', on ? 'visible' : 'none');
   map.setLayoutProperty('wildfire-line', 'visibility', on ? 'visible' : 'none');
+}
+
+// ── air quality ───────────────────────────────────────────
+let aqiLoaded = false;
+
+const AQI_COLORS = {
+  good: '#00e400',
+  moderate: '#e8d000',
+  'unhealthy for sensitive groups': '#ff7e00',
+  unhealthy: '#ff2222',
+  'very unhealthy': '#8f3f97',
+  hazardous: '#7e0023',
+};
+
+function loadAqi() {
+  fetch('/aqi.json', { cache: 'no-store' })
+    .then(r => r.json())
+    .then(data => {
+      if (!data || !data.length) return;
+      map.addSource('aqi-points', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: data.map(p => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
+            properties: p,
+          })),
+        },
+      });
+      map.addLayer({
+        id: 'aqi-dots',
+        type: 'circle',
+        source: 'aqi-points',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 4, 10, 9],
+          'circle-color': [
+            'match', ['get', 'category'],
+            'good', AQI_COLORS.good,
+            'moderate', AQI_COLORS.moderate,
+            'unhealthy for sensitive groups', AQI_COLORS['unhealthy for sensitive groups'],
+            'unhealthy', AQI_COLORS.unhealthy,
+            'very unhealthy', AQI_COLORS['very unhealthy'],
+            AQI_COLORS.hazardous,
+          ],
+          'circle-stroke-color': '#0a0a0c',
+          'circle-stroke-width': 1.2,
+          'circle-opacity': 0.9,
+        },
+      });
+      const seen = new Set();
+      map.on('click', 'aqi-dots', e => {
+        const p = e.features[0].properties;
+        new maplibregl.Popup()
+          .setLngLat([p.lon, p.lat])
+          .setHTML(
+            `<strong>${p.name}</strong> — aqi ${p.aqi} (${p.category})<br>` +
+            `<span style="opacity:.8">pm2.5 ${p.pm25} μg/m³ · ${p.ts.replace('T', ' ')}</span>`
+          )
+          .addTo(map);
+      });
+      map.on('mouseenter', 'aqi-dots', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'aqi-dots', () => { map.getCanvas().style.cursor = ''; });
+      aqiLoaded = true;
+      setStatus(`air quality: ${data.length} stations`);
+    })
+    .catch(() => { setStatus('air quality: unavailable'); });
+}
+
+function toggleAqi() {
+  const on = document.getElementById('lyr-aqi').checked;
+  if (!aqiLoaded) { loadAqi(); return; }
+  map.setLayoutProperty('aqi-dots', 'visibility', on ? 'visible' : 'none');
 }
 
 // ── themes ────────────────────────────────────────────────
