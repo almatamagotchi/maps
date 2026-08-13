@@ -276,7 +276,7 @@
     <h4>live</h4>
     <label><input type="checkbox" id="lyr-caltrain" onchange="toggleCaltrain()"> caltrain departures</label>
     <label><input type="checkbox" id="lyr-traffic" onchange="toggleTraffic()"> traffic incidents</label>
-    <label><input type="checkbox" disabled> wildfires <span class="badge">soon</span></label>
+    <label><input type="checkbox" id="lyr-wildfires" onchange="toggleWildfires()"> wildfires</label>
     <label><input type="checkbox" disabled> air quality <span class="badge">soon</span></label>
   </div>
 
@@ -956,6 +956,61 @@ function toggleTraffic() {
   const on = document.getElementById('lyr-traffic').checked;
   if (!trafficLoaded) { loadTraffic(); return; }
   map.setLayoutProperty('traffic-dots', 'visibility', on ? 'visible' : 'none');
+}
+
+// ── live: wildfires (WFIGS, refreshed every 30 min on the VPS) ──────
+let wildfiresLoaded = false;
+function loadWildfires() {
+  document.getElementById('panel-status').textContent = 'loading wildfire data…';
+  fetch('/wildfires.json')
+    .then(r => r.json())
+    .then(data => {
+      map.addSource('wildfires', { type: 'geojson', data });
+      map.addLayer({
+        id: 'wildfire-fill',
+        type: 'fill',
+        source: 'wildfires',
+        paint: {
+          'fill-color': ['interpolate', ['linear'], ['get', 'acres'],
+            0, '#e0b050', 500, '#e0554f', 10000, '#c4302b'],
+          'fill-opacity': 0.3
+        }
+      });
+      map.addLayer({
+        id: 'wildfire-line',
+        type: 'line',
+        source: 'wildfires',
+        paint: {
+          'line-color': '#e0554f',
+          'line-width': 1,
+          'line-opacity': 0.7
+        }
+      });
+      map.setLayoutProperty('wildfire-fill', 'visibility', 'visible');
+      map.setLayoutProperty('wildfire-line', 'visibility', 'visible');
+
+      map.on('click', 'wildfire-fill', e => {
+        const p = e.features[0].properties;
+        const acres = p.acres ? p.acres.toLocaleString() + ' acres' : 'unknown size';
+        new maplibregl.Popup({ offset: 14, closeButton: false })
+          .setLngLat(e.lngLat)
+          .setHTML('<div style="color:#c4c0b8;font:12px system-ui;max-width:280px"><strong style="color:#e0554f">' + (p.name || 'unnamed fire') + '</strong><p style="margin:4px 0 0;color:#8b8780;line-height:1.4">' + acres + '</p></div>')
+          .addTo(map);
+      });
+      map.on('mouseenter', 'wildfire-fill', () => map.getCanvas().style.cursor = 'pointer');
+      map.on('mouseleave', 'wildfire-fill', () => map.getCanvas().style.cursor = '');
+
+      wildfiresLoaded = true;
+      document.getElementById('panel-status').textContent = data.count + ' active fires · ' + (data.updated || '').slice(0, 16).replace('T', ' ');
+    })
+    .catch(() => { document.getElementById('panel-status').textContent = 'wildfire data unavailable'; });
+}
+
+function toggleWildfires() {
+  const on = document.getElementById('lyr-wildfires').checked;
+  if (!wildfiresLoaded) { loadWildfires(); return; }
+  map.setLayoutProperty('wildfire-fill', 'visibility', on ? 'visible' : 'none');
+  map.setLayoutProperty('wildfire-line', 'visibility', on ? 'visible' : 'none');
 }
 
 // ── themes ────────────────────────────────────────────────
